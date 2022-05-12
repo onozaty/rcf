@@ -2,8 +2,6 @@ package replace
 
 import (
 	"regexp"
-
-	"github.com/pkg/errors"
 )
 
 type regexpReplacer struct {
@@ -15,7 +13,7 @@ func NewRegexpReplacer(regexStr string, replacement string) (Replacer, error) {
 
 	regex, err := regexp.Compile(regexStr)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 
 	return &regexpReplacer{
