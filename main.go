@@ -48,7 +48,7 @@ func run(args []string) int {
 
 	if err := flag.Parse(args); err != nil {
 		usage(flag, os.Stderr)
-		fmt.Println("\nError: ", err)
+		fmt.Fprintln(os.Stderr, "\nError: ", err)
 		return NG
 	}
 
@@ -63,7 +63,7 @@ func run(args []string) int {
 	}
 
 	if err := replace(inputPath, outputPath, targetRegex, targetStr, replacement); err != nil {
-		fmt.Println("\nError: ", err)
+		fmt.Fprintln(os.Stderr, "\nError: ", err)
 		return NG
 	}
 
@@ -109,7 +109,9 @@ func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer
 	// 出力先のディレクトリが無かったら作っておく
 	_, err = os.Stat(outputDirPath)
 	if os.IsNotExist(err) {
-		os.Mkdir(outputDirPath, os.ModePerm)
+		if err := os.Mkdir(outputDirPath, os.ModePerm); err != nil {
+			return err
+		}
 	} else if err != nil {
 		return err
 	}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,12 +27,10 @@ func TestRun_File_Regex(t *testing.T) {
 	}
 
 	// ACT
-	r := run(args)
-	if r != OK {
-		t.Fatal("run failed")
-	}
+	c := run(args)
 
 	// ASSERT
+	assert.Equal(t, OK, c)
 	replaced := readString(t, output)
 	assert.Equal(t, "abc\nabc\nax", replaced)
 }
@@ -52,12 +52,10 @@ func TestRun_File_String(t *testing.T) {
 	}
 
 	// ACT
-	r := run(args)
-	if r != OK {
-		t.Fatal("run failed")
-	}
+	c := run(args)
 
 	// ASSERT
+	assert.Equal(t, OK, c)
 	replaced := readString(t, output)
 	assert.Equal(t, "axxab.ac.ad.xxb.c.d", replaced)
 }
@@ -84,12 +82,10 @@ func TestRun_Dir_Regex(t *testing.T) {
 	}
 
 	// ACT
-	r := run(args)
-	if r != OK {
-		t.Fatal("run failed")
-	}
+	c := run(args)
 
 	// ASSERT
+	assert.Equal(t, OK, c)
 	{
 		replaced := readString(t, filepath.Join(output, "input1.txt"))
 		assert.Equal(t, "abc\nabc\nax", replaced)
@@ -126,12 +122,10 @@ func TestRun_Dir_String(t *testing.T) {
 	}
 
 	// ACT
-	r := run(args)
-	if r != OK {
-		t.Fatal("run failed")
-	}
+	c := run(args)
 
 	// ASSERT
+	assert.Equal(t, OK, c)
 	{
 		replaced := readString(t, filepath.Join(output, "input1.txt"))
 		assert.Equal(t, "abc\n\naa", replaced)
@@ -144,6 +138,227 @@ func TestRun_Dir_String(t *testing.T) {
 		replaced := readString(t, filepath.Join(output, "input3.txt"))
 		assert.Equal(t, "", replaced)
 	}
+}
+
+func TestRun_Dir_CreateOutputDir(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createDir(t, d, "input")
+
+	createFileWriteString(t, input, "input1.txt", "abc\nabc\nabc")
+
+	output := filepath.Join(d, "output") // 出力ディレクトリは存在しない状態
+
+	args := []string{
+		"-i", input,
+		"-r", "(?m)c$",
+		"-t", "x",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, OK, c)
+	replaced := readString(t, filepath.Join(output, "input1.txt"))
+	assert.Equal(t, "abx\nabx\nabx", replaced)
+}
+
+func TestRun_InvalidRegex(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "")
+	output := filepath.Join(d, "output.txt")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", input,
+		"-r", "[a", // 不正な正規表現
+		"-t", "",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Equal(t, "\nError:  error parsing regexp: missing closing ]: `[a`\n", buf.String())
+}
+
+func TestRun_InputNotFound(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := filepath.Join(d, "input") // 存在しない
+	output := filepath.Join(d, "output")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", input,
+		"-s", "a",
+		"-t", "",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "input: The system cannot find the file specified")
+}
+
+func TestRun_OutputNotFound(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createDir(t, d, "input")
+	output := filepath.Join(d, "a", "b") // 親ディレクトリ自体が無い
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", input,
+		"-s", "a",
+		"-t", "",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "b: The system cannot find the path specified.")
+}
+
+func TestRun_Help(t *testing.T) {
+
+	// ARRANGE
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stdout := os.Stdout
+	os.Stdout = w
+	defer func() { os.Stdout = stdout }()
+
+	args := []string{
+		"-h",
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, OK, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "Usage: rcf")
+}
+
+func TestRun_EmptyArgs(t *testing.T) {
+
+	// ARRANGE
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "Usage: rcf")
+}
+
+func TestRun_InvalidArgs(t *testing.T) {
+
+	// ARRANGE
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-x",
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "unknown shorthand flag: 'x' in -x")
 }
 
 func createFileWriteBytes(t *testing.T, dir string, name string, content []byte) string {
