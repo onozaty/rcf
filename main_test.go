@@ -168,6 +168,58 @@ func TestRun_Dir_CreateOutputDir(t *testing.T) {
 	assert.Equal(t, "abx\nabx\nabx", replaced)
 }
 
+func TestRun_Escape_String(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "1\n2\n")
+	output := filepath.Join(d, "output.txt")
+
+	args := []string{
+		"-i", input,
+		"-s", `\n`,
+		"-t", `\t`,
+		"-e",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, OK, c)
+	replaced := readString(t, output)
+	assert.Equal(t, "1\t2\t", replaced)
+}
+
+func TestRun_Escape_Regex(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "a　　　")
+	output := filepath.Join(d, "output.txt")
+
+	args := []string{
+		"-i", input,
+		"-r", `\u3000+`,
+		"-t", `\u0020`,
+		"-e",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, OK, c)
+	replaced := readString(t, output)
+	assert.Equal(t, "a ", replaced)
+}
+
 func TestRun_InvalidRegex(t *testing.T) {
 
 	// ARRANGE
@@ -202,7 +254,121 @@ func TestRun_InvalidRegex(t *testing.T) {
 	w.Close()
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
-	assert.Equal(t, "\nError:  error parsing regexp: missing closing ]: `[a`\n", buf.String())
+	assert.Equal(t, "\nError: error parsing regexp: missing closing ]: `[a`\n", buf.String())
+}
+
+func TestRun_InvalidEscape_Regex(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "")
+	output := filepath.Join(d, "output.txt")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", input,
+		"-r", `\x`, // 不正なエスケープ
+		"-t", "",
+		"-e",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Equal(t, "\nError: --regex is invalid string: \\x\n", buf.String())
+}
+
+func TestRun_InvalidEscape_String(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "")
+	output := filepath.Join(d, "output.txt")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", input,
+		"-s", `\x`, // 不正なエスケープ
+		"-t", "",
+		"-e",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Equal(t, "\nError: --string is invalid string: \\x\n", buf.String())
+}
+
+func TestRun_InvalidEscape_Replacement(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "")
+	output := filepath.Join(d, "output.txt")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", input,
+		"-s", "a",
+		"-t", `\`, // 不正なエスケープ
+		"-e",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Equal(t, "\nError: --replacement is invalid string: \\\n", buf.String())
 }
 
 func TestRun_InputNotFound(t *testing.T) {

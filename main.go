@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	r "github.com/onozaty/rcf/replace"
 	"github.com/spf13/pflag"
@@ -31,6 +32,7 @@ func run(args []string) int {
 	var targetStr string
 	var targetRegex string
 	var replacement string
+	var escapeSequence bool
 	var help bool
 
 	// テストで繰り返しパースすることになるので
@@ -39,6 +41,7 @@ func run(args []string) int {
 	flag.StringVarP(&targetRegex, "regex", "r", "", "Target regex.")
 	flag.StringVarP(&targetStr, "string", "s", "", "Target string.")
 	flag.StringVarP(&replacement, "replacement", "t", "", "Replacement.")
+	flag.BoolVarP(&escapeSequence, "escape", "e", false, "Enable escape sequence.")
 	flag.StringVarP(&outputPath, "output", "o", "", "Output file/dir path.")
 	flag.BoolVarP(&help, "help", "h", false, "Help.")
 	flag.SortFlags = false
@@ -48,7 +51,7 @@ func run(args []string) int {
 
 	if err := flag.Parse(args); err != nil {
 		usage(flag, os.Stderr)
-		fmt.Fprintln(os.Stderr, "\nError: ", err)
+		fmt.Fprintln(os.Stderr, "\nError:", err)
 		return NG
 	}
 
@@ -62,8 +65,38 @@ func run(args []string) int {
 		return NG
 	}
 
-	if err := replace(inputPath, outputPath, targetRegex, targetStr, replacement); err != nil {
-		fmt.Fprintln(os.Stderr, "\nError: ", err)
+	if escapeSequence {
+		// Unquoteした文字列を再設定
+		if unquoted, err := unquote(targetRegex); err != nil {
+			fmt.Fprintln(os.Stderr, "\nError: --regex is invalid string:", targetRegex)
+			return NG
+		} else {
+			targetRegex = unquoted
+		}
+
+		if unquoted, err := unquote(targetStr); err != nil {
+			fmt.Fprintln(os.Stderr, "\nError: --string is invalid string:", targetStr)
+			return NG
+		} else {
+			targetStr = unquoted
+		}
+
+		if unquoted, err := unquote(replacement); err != nil {
+			fmt.Fprintln(os.Stderr, "\nError: --replacement is invalid string:", replacement)
+			return NG
+		} else {
+			replacement = unquoted
+		}
+	}
+
+	condition := condition{
+		targetRegex: targetRegex,
+		targetStr:   targetStr,
+		replacement: replacement,
+	}
+
+	if err := replace(inputPath, outputPath, condition); err != nil {
+		fmt.Fprintln(os.Stderr, "\nError:", err)
 		return NG
 	}
 
@@ -73,14 +106,20 @@ func run(args []string) int {
 func usage(flag *pflag.FlagSet, w io.Writer) {
 
 	fmt.Fprintf(w, "rcf v%s (%s)\n\n", Version, Commit)
-	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT -o OUTPUT\n\nFlags\n")
+	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT [-e] -o OUTPUT\n\nFlags\n")
 	flag.SetOutput(w)
 	flag.PrintDefaults()
 }
 
-func replace(inputPath string, outputPath string, targetRegex string, targetStr string, replacement string) error {
+type condition struct {
+	targetRegex string
+	targetStr   string
+	replacement string
+}
 
-	replacer, err := newReplacer(targetRegex, targetStr, replacement)
+func replace(inputPath string, outputPath string, condition condition) error {
+
+	replacer, err := newReplacer(condition)
 	if err != nil {
 		return err
 	}
@@ -147,15 +186,19 @@ func replaceFile(inputFilePath string, outputFilePath string, replacer r.Replace
 	return err
 }
 
-func newReplacer(targetRegex string, targetStr string, replacement string) (r.Replacer, error) {
+func newReplacer(condition condition) (r.Replacer, error) {
 
-	if targetRegex != "" {
-		replacer, err := r.NewRegexpReplacer(targetRegex, replacement)
+	if condition.targetRegex != "" {
+		replacer, err := r.NewRegexpReplacer(condition.targetRegex, condition.replacement)
 		if err != nil {
 			return nil, err
 		}
 		return replacer, nil
 	}
 
-	return r.NewStringReplacer(targetStr, replacement), nil
+	return r.NewStringReplacer(condition.targetStr, condition.replacement), nil
+}
+
+func unquote(str string) (string, error) {
+	return strconv.Unquote(`"` + str + `"`)
 }
