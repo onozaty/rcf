@@ -220,6 +220,30 @@ func TestRun_Escape_Regex(t *testing.T) {
 	assert.Equal(t, "a ", replaced)
 }
 
+func TestRun_Overwrite(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "aaa")
+
+	args := []string{
+		"-i", input,
+		"-s", "a",
+		"-t", "x",
+		"--overwrite",
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, OK, c)
+	replaced := readString(t, input)
+	assert.Equal(t, "xxx", replaced)
+}
+
 func TestRun_InvalidRegex(t *testing.T) {
 
 	// ARRANGE
@@ -473,7 +497,7 @@ func TestRun_Help(t *testing.T) {
 	assert.Contains(t, buf.String(), "Usage: rcf")
 }
 
-func TestRun_EmptyArgs(t *testing.T) {
+func TestRun_InvalidArgs_Empty(t *testing.T) {
 
 	// ARRANGE
 	r, w, err := os.Pipe()
@@ -499,7 +523,7 @@ func TestRun_EmptyArgs(t *testing.T) {
 	assert.Contains(t, buf.String(), "Usage: rcf")
 }
 
-func TestRun_InvalidArgs(t *testing.T) {
+func TestRun_InvalidArgs_Unknown(t *testing.T) {
 
 	// ARRANGE
 	r, w, err := os.Pipe()
@@ -525,6 +549,96 @@ func TestRun_InvalidArgs(t *testing.T) {
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
 	assert.Contains(t, buf.String(), "unknown shorthand flag: 'x' in -x")
+}
+
+func TestRun_InvalidArgs_InputEmpty(t *testing.T) {
+
+	// ARRANGE
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-s", "a",
+		"-t", "",
+		"-o", "out",
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "Usage: rcf")
+}
+
+func TestRun_InvalidArgs_StringAndRegexEmpty(t *testing.T) {
+
+	// ARRANGE
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", "in",
+		"-t", "",
+		"-o", "out",
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "Usage: rcf")
+}
+
+func TestRun_InvalidArgs_OutputAndOverwriteEmpty(t *testing.T) {
+
+	// ARRANGE
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", "in",
+		"-s", "x",
+		"-t", "",
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	assert.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Contains(t, buf.String(), "Usage: rcf")
 }
 
 func createFileWriteBytes(t *testing.T, dir string, name string, content []byte) string {

@@ -33,6 +33,7 @@ func run(args []string) int {
 	var targetRegex string
 	var replacement string
 	var escapeSequence bool
+	var overwrite bool
 	var help bool
 
 	// テストで繰り返しパースすることになるので
@@ -43,6 +44,7 @@ func run(args []string) int {
 	flag.StringVarP(&replacement, "replacement", "t", "", "Replacement.")
 	flag.BoolVarP(&escapeSequence, "escape", "e", false, "Enable escape sequence.")
 	flag.StringVarP(&outputPath, "output", "o", "", "Output file/dir path.")
+	flag.BoolVarP(&overwrite, "overwrite", "", false, "Overwrite the input file.")
 	flag.BoolVarP(&help, "help", "h", false, "Help.")
 	flag.SortFlags = false
 	flag.Usage = func() {
@@ -60,7 +62,7 @@ func run(args []string) int {
 		return OK
 	}
 
-	if inputPath == "" || outputPath == "" || (targetRegex == "" && targetStr == "") {
+	if inputPath == "" || (outputPath == "" && !overwrite) || (targetRegex == "" && targetStr == "") {
 		usage(flag, os.Stderr)
 		return NG
 	}
@@ -89,6 +91,11 @@ func run(args []string) int {
 		}
 	}
 
+	if outputPath == "" && overwrite {
+		// 上書き指定されていた場合、入力と同じものを指定
+		outputPath = inputPath
+	}
+
 	condition := condition{
 		targetRegex: targetRegex,
 		targetStr:   targetStr,
@@ -106,7 +113,7 @@ func run(args []string) int {
 func usage(flag *pflag.FlagSet, w io.Writer) {
 
 	fmt.Fprintf(w, "rcf v%s (%s)\n\n", Version, Commit)
-	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT [-e] -o OUTPUT\n\nFlags\n")
+	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT [-e] [-o OUTPUT | --overwrite ]\n\nFlags\n")
 	flag.SetOutput(w)
 	flag.PrintDefaults()
 }
