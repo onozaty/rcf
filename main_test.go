@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/japanese"
 )
 
 func TestRun_File_Regex(t *testing.T) {
@@ -30,7 +33,7 @@ func TestRun_File_Regex(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	replaced := readString(t, output)
 	assert.Equal(t, "abc\nabc\nax", replaced)
 }
@@ -55,7 +58,7 @@ func TestRun_File_String(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	replaced := readString(t, output)
 	assert.Equal(t, "axxab.ac.ad.xxb.c.d", replaced)
 }
@@ -85,7 +88,7 @@ func TestRun_Dir_Regex(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	{
 		replaced := readString(t, filepath.Join(output, "input1.txt"))
 		assert.Equal(t, "abc\nabc\nax", replaced)
@@ -98,6 +101,31 @@ func TestRun_Dir_Regex(t *testing.T) {
 		replaced := readString(t, filepath.Join(output, "input3.txt"))
 		assert.Equal(t, "ax", replaced)
 	}
+}
+
+func TestRun_File_Regex_Japanese(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "あいうえおかきくけこ")
+	output := filepath.Join(d, "output.txt")
+
+	args := []string{
+		"-i", input,
+		"-r", "あ.{4}",
+		"-t", "",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	require.Equal(t, OK, c)
+	replaced := readString(t, output)
+	assert.Equal(t, "かきくけこ", replaced)
 }
 
 func TestRun_Dir_String(t *testing.T) {
@@ -125,7 +153,7 @@ func TestRun_Dir_String(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	{
 		replaced := readString(t, filepath.Join(output, "input1.txt"))
 		assert.Equal(t, "abc\n\naa", replaced)
@@ -163,7 +191,7 @@ func TestRun_Dir_CreateOutputDir(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	replaced := readString(t, filepath.Join(output, "input1.txt"))
 	assert.Equal(t, "abx\nabx\nabx", replaced)
 }
@@ -181,7 +209,7 @@ func TestRun_Escape_String(t *testing.T) {
 		"-i", input,
 		"-s", `\n`,
 		"-t", `\t`,
-		"-e",
+		"--escape",
 		"-o", output,
 	}
 
@@ -189,7 +217,7 @@ func TestRun_Escape_String(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	replaced := readString(t, output)
 	assert.Equal(t, "1\t2\t", replaced)
 }
@@ -215,7 +243,7 @@ func TestRun_Escape_Regex(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	replaced := readString(t, output)
 	assert.Equal(t, "a ", replaced)
 }
@@ -239,9 +267,61 @@ func TestRun_Overwrite(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 	replaced := readString(t, input)
 	assert.Equal(t, "xxx", replaced)
+}
+
+func TestRun_Charset_UTF8(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "あいうえお")
+	output := filepath.Join(d, "output.txt")
+
+	args := []string{
+		"-i", input,
+		"-r", "あ.う",
+		"-t", "",
+		"-c", "utf-8",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	require.Equal(t, OK, c)
+	replaced := readString(t, output)
+	assert.Equal(t, "えお", replaced)
+}
+
+func TestRun_Charset_SJIS(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteBytes(t, d, "input.txt", stringToByte(t, "あいうえお", japanese.ShiftJIS))
+	output := filepath.Join(d, "output.txt")
+
+	args := []string{
+		"-i", input,
+		"-r", "あ.う",
+		"-t", "",
+		"-c", "sjis",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	require.Equal(t, OK, c)
+	replaced := byteToString(t, readBytes(t, output), japanese.ShiftJIS)
+	assert.Equal(t, "えお", replaced)
 }
 
 func TestRun_InvalidRegex(t *testing.T) {
@@ -273,7 +353,7 @@ func TestRun_InvalidRegex(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -311,7 +391,7 @@ func TestRun_InvalidEscape_Regex(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -349,7 +429,7 @@ func TestRun_InvalidEscape_String(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -387,7 +467,7 @@ func TestRun_InvalidEscape_Replacement(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -424,7 +504,7 @@ func TestRun_InputNotFound(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -461,7 +541,7 @@ func TestRun_OutputNotFound(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -489,7 +569,7 @@ func TestRun_Help(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, OK, c)
+	require.Equal(t, OK, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -515,7 +595,7 @@ func TestRun_InvalidArgs_Empty(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -543,7 +623,7 @@ func TestRun_InvalidArgs_Unknown(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -573,7 +653,7 @@ func TestRun_InvalidArgs_InputEmpty(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -603,7 +683,7 @@ func TestRun_InvalidArgs_StringAndRegexEmpty(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
@@ -633,13 +713,15 @@ func TestRun_InvalidArgs_OutputAndOverwriteEmpty(t *testing.T) {
 	c := run(args)
 
 	// ASSERT
-	assert.Equal(t, NG, c)
+	require.Equal(t, NG, c)
 
 	w.Close()
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
 	assert.Contains(t, buf.String(), "Usage: rcf")
 }
+
+//////////////////////////////////////////////////////////
 
 func createFileWriteBytes(t *testing.T, dir string, name string, content []byte) string {
 
@@ -701,4 +783,22 @@ func readString(t *testing.T, name string) string {
 
 	bo := readBytes(t, name)
 	return string(bo)
+}
+
+func byteToString(t *testing.T, bytes []byte, enc encoding.Encoding) string {
+	decoded, err := enc.NewDecoder().Bytes(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(decoded)
+}
+
+func stringToByte(t *testing.T, str string, enc encoding.Encoding) []byte {
+	encoded, err := enc.NewEncoder().Bytes([]byte(str))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return encoded
 }

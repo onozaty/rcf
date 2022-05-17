@@ -9,6 +9,8 @@ import (
 
 	r "github.com/onozaty/rcf/replace"
 	"github.com/spf13/pflag"
+	e "golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/htmlindex"
 )
 
 const (
@@ -33,6 +35,7 @@ func run(args []string) int {
 	var targetRegex string
 	var replacement string
 	var escapeSequence bool
+	var charset string
 	var overwrite bool
 	var help bool
 
@@ -43,8 +46,9 @@ func run(args []string) int {
 	flag.StringVarP(&targetStr, "string", "s", "", "Target string.")
 	flag.StringVarP(&replacement, "replacement", "t", "", "Replacement.")
 	flag.BoolVarP(&escapeSequence, "escape", "e", false, "Enable escape sequence.")
+	flag.StringVarP(&charset, "charset", "c", "UTF-8", "Charset. (default UTF-8)")
 	flag.StringVarP(&outputPath, "output", "o", "", "Output file/dir path.")
-	flag.BoolVarP(&overwrite, "overwrite", "", false, "Overwrite the input file.")
+	flag.BoolVarP(&overwrite, "overwrite", "O", false, "Overwrite the input file.")
 	flag.BoolVarP(&help, "help", "h", false, "Help.")
 	flag.SortFlags = false
 	flag.Usage = func() {
@@ -102,7 +106,7 @@ func run(args []string) int {
 		replacement: replacement,
 	}
 
-	if err := replace(inputPath, outputPath, condition); err != nil {
+	if err := replace(inputPath, outputPath, condition, charset); err != nil {
 		fmt.Fprintln(os.Stderr, "\nError:", err)
 		return NG
 	}
@@ -113,7 +117,7 @@ func run(args []string) int {
 func usage(flag *pflag.FlagSet, w io.Writer) {
 
 	fmt.Fprintf(w, "rcf v%s (%s)\n\n", Version, Commit)
-	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT [-e] [-o OUTPUT | --overwrite ]\n\nFlags\n")
+	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT [--escape] [-c CHARSET] [-o OUTPUT | --overwrite]\n\nFlags\n")
 	flag.SetOutput(w)
 	flag.PrintDefaults()
 }
@@ -124,7 +128,12 @@ type condition struct {
 	replacement string
 }
 
-func replace(inputPath string, outputPath string, condition condition) error {
+func replace(inputPath string, outputPath string, condition condition, charset string) error {
+
+	encoding, err := htmlindex.Get(charset)
+	if err != nil {
+		return err
+	}
 
 	replacer, err := newReplacer(condition)
 	if err != nil {
@@ -138,14 +147,14 @@ func replace(inputPath string, outputPath string, condition condition) error {
 
 	if !inputInfo.IsDir() {
 		// ファイル指定
-		return replaceFile(inputPath, outputPath, replacer)
+		return replaceFile(inputPath, outputPath, replacer, encoding)
 	} else {
 		// ディレクトリ指定
-		return replaceFiles(inputPath, outputPath, replacer)
+		return replaceFiles(inputPath, outputPath, replacer, encoding)
 	}
 }
 
-func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer) error {
+func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer, encoding e.Encoding) error {
 
 	entries, err := os.ReadDir(inputDirPath)
 	if err != nil {
@@ -164,7 +173,7 @@ func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
-			err := replaceFile(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer)
+			err := replaceFile(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer, encoding)
 			if err != nil {
 				return err
 			}
@@ -174,14 +183,19 @@ func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer
 	return nil
 }
 
-func replaceFile(inputFilePath string, outputFilePath string, replacer r.Replacer) error {
+func replaceFile(inputFilePath string, outputFilePath string, replacer r.Replacer, encoding e.Encoding) error {
 
 	inputBytes, err := os.ReadFile(inputFilePath)
 	if err != nil {
 		return err
 	}
 
-	outputContents := replacer.Replace(string(inputBytes))
+	decodedBytes, err := encoding.NewDecoder().Bytes(inputBytes)
+	if err != nil {
+		return err
+	}
+
+	outputContents := replacer.Replace(string(decodedBytes))
 
 	out, err := os.Create(outputFilePath)
 	if err != nil {
@@ -189,7 +203,12 @@ func replaceFile(inputFilePath string, outputFilePath string, replacer r.Replace
 	}
 	defer out.Close()
 
-	_, err = out.Write([]byte(outputContents))
+	encodedBytes, err := encoding.NewEncoder().Bytes([]byte(outputContents))
+	if err != nil {
+		return err
+	}
+
+	_, err = out.Write(encodedBytes)
 	return err
 }
 
