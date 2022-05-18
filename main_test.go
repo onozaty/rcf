@@ -196,6 +196,60 @@ func TestRun_Dir_CreateOutputDir(t *testing.T) {
 	assert.Equal(t, "abx\nabx\nabx", replaced)
 }
 
+func TestRun_Dir_Recursive(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createDir(t, d, "input")
+	createFileWriteString(t, input, "1.txt", "abc")
+	createFileWriteString(t, input, "2.txt", "")
+
+	inputSub := createDir(t, input, "sub")
+	createFileWriteString(t, inputSub, "3.txt", "cat")
+	createFileWriteString(t, inputSub, "4.txt", "aaa")
+
+	inputSubSub := createDir(t, inputSub, "sub")
+	createFileWriteString(t, inputSubSub, "5.txt", "a")
+
+	output := createDir(t, d, "output")
+
+	args := []string{
+		"-i", input,
+		"-s", "a",
+		"-t", "",
+		"-R",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	require.Equal(t, OK, c)
+	{
+		replaced := readString(t, filepath.Join(output, "1.txt"))
+		assert.Equal(t, "bc", replaced)
+	}
+	{
+		replaced := readString(t, filepath.Join(output, "2.txt"))
+		assert.Equal(t, "", replaced)
+	}
+	{
+		replaced := readString(t, filepath.Join(output, "sub", "3.txt"))
+		assert.Equal(t, "ct", replaced)
+	}
+	{
+		replaced := readString(t, filepath.Join(output, "sub", "4.txt"))
+		assert.Equal(t, "", replaced)
+	}
+	{
+		replaced := readString(t, filepath.Join(output, "sub", "sub", "5.txt"))
+		assert.Equal(t, "", replaced)
+	}
+}
+
 func TestRun_Escape_String(t *testing.T) {
 
 	// ARRANGE

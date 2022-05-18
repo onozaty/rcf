@@ -37,6 +37,7 @@ func run(args []string) int {
 	var escapeSequence bool
 	var charset string
 	var overwrite bool
+	var recursive bool
 	var help bool
 
 	// テストで繰り返しパースすることになるので
@@ -46,6 +47,7 @@ func run(args []string) int {
 	flag.StringVarP(&targetStr, "string", "s", "", "Target string.")
 	flag.StringVarP(&replacement, "replacement", "t", "", "Replacement.")
 	flag.BoolVarP(&escapeSequence, "escape", "e", false, "Enable escape sequence.")
+	flag.BoolVarP(&recursive, "recursive", "R", false, "Recursively traverse the input dir.")
 	flag.StringVarP(&charset, "charset", "c", "UTF-8", "Charset. (default UTF-8)")
 	flag.StringVarP(&outputPath, "output", "o", "", "Output file/dir path.")
 	flag.BoolVarP(&overwrite, "overwrite", "O", false, "Overwrite the input file.")
@@ -106,7 +108,7 @@ func run(args []string) int {
 		replacement: replacement,
 	}
 
-	if err := replace(inputPath, outputPath, condition, charset); err != nil {
+	if err := replace(inputPath, outputPath, condition, charset, recursive); err != nil {
 		fmt.Fprintln(os.Stderr, "\nError:", err)
 		return NG
 	}
@@ -117,7 +119,7 @@ func run(args []string) int {
 func usage(flag *pflag.FlagSet, w io.Writer) {
 
 	fmt.Fprintf(w, "rcf v%s (%s)\n\n", Version, Commit)
-	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT [--escape] [-c CHARSET] [-o OUTPUT | --overwrite]\n\nFlags\n")
+	fmt.Fprintf(w, "Usage: rcf -i INPUT [-r REGEX | -s STRING] -t REPLACEMENT [--escape] [--recursive] [-c CHARSET] [-o OUTPUT | --overwrite]\n\nFlags\n")
 	flag.SetOutput(w)
 	flag.PrintDefaults()
 }
@@ -128,7 +130,7 @@ type condition struct {
 	replacement string
 }
 
-func replace(inputPath string, outputPath string, condition condition, charset string) error {
+func replace(inputPath string, outputPath string, condition condition, charset string, recursive bool) error {
 
 	encoding, err := htmlindex.Get(charset)
 	if err != nil {
@@ -150,11 +152,11 @@ func replace(inputPath string, outputPath string, condition condition, charset s
 		return replaceFile(inputPath, outputPath, replacer, encoding)
 	} else {
 		// ディレクトリ指定
-		return replaceFiles(inputPath, outputPath, replacer, encoding)
+		return replaceFiles(inputPath, outputPath, replacer, encoding, recursive)
 	}
 }
 
-func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer, encoding e.Encoding) error {
+func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer, encoding e.Encoding, recursive bool) error {
 
 	entries, err := os.ReadDir(inputDirPath)
 	if err != nil {
@@ -175,6 +177,11 @@ func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer
 		if !entry.IsDir() {
 			err := replaceFile(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer, encoding)
 			if err != nil {
+				return err
+			}
+		} else if recursive {
+			// ディレクトリかつ再帰的にたどる場合
+			if err := replaceFiles(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer, encoding, recursive); err != nil {
 				return err
 			}
 		}
