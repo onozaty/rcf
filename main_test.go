@@ -378,6 +378,44 @@ func TestRun_Charset_SJIS(t *testing.T) {
 	assert.Equal(t, "えお", replaced)
 }
 
+func TestRun_Charset_Invalid(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteString(t, d, "input.txt", "")
+	output := filepath.Join(d, "output.txt")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = stderr }()
+
+	args := []string{
+		"-i", input,
+		"-r", "x",
+		"-t", "",
+		"-c", "xxxx", // 存在しないCharset
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	require.Equal(t, NG, c)
+
+	w.Close()
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	assert.Equal(t, "\nError: htmlindex: invalid encoding name\n", buf.String())
+}
+
 func TestRun_InvalidRegex(t *testing.T) {
 
 	// ARRANGE
