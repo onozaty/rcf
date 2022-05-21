@@ -48,7 +48,7 @@ func run(args []string) int {
 	flag.StringVarP(&replacement, "replacement", "t", "", "Replacement.")
 	flag.BoolVarP(&escapeSequence, "escape", "e", false, "Enable escape sequence.")
 	flag.BoolVarP(&recursive, "recursive", "R", false, "Recursively traverse the input dir.")
-	flag.StringVarP(&charset, "charset", "c", "UTF-8", "Charset. (default UTF-8)")
+	flag.StringVarP(&charset, "charset", "c", "UTF-8", "Charset.")
 	flag.StringVarP(&outputPath, "output", "o", "", "Output file/dir path.")
 	flag.BoolVarP(&overwrite, "overwrite", "O", false, "Overwrite the input file.")
 	flag.BoolVarP(&help, "help", "h", false, "Help.")
