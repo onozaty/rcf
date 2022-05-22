@@ -2,6 +2,7 @@
 
 [![GitHub license](https://img.shields.io/github/license/onozaty/rcf)](https://github.com/onozaty/rcf/blob/main/LICENSE)
 [![Test](https://github.com/onozaty/rcf/actions/workflows/test.yaml/badge.svg)](https://github.com/onozaty/rcf/actions/workflows/test.yaml)
+[![codecov](https://codecov.io/gh/onozaty/rcf/branch/main/graph/badge.svg?token=MAL9FJ1QW3)](https://codecov.io/gh/onozaty/rcf)
 
 `rcf` is a CLI tool for replacing file contents.
 
