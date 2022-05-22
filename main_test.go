@@ -601,7 +601,7 @@ func TestRun_InputNotFound(t *testing.T) {
 	w.Close()
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
-	assert.Contains(t, buf.String(), "input: The system cannot find the file specified")
+	assert.Contains(t, buf.String(), "Error:") // 実行環境によってファイルが存在しない場合のエラーメッセージが異なるので、Errorだけで判定
 }
 
 func TestRun_OutputNotFound(t *testing.T) {
@@ -638,7 +638,7 @@ func TestRun_OutputNotFound(t *testing.T) {
 	w.Close()
 	var buf bytes.Buffer
 	io.Copy(&buf, r)
-	assert.Contains(t, buf.String(), "b: The system cannot find the path specified.")
+	assert.Contains(t, buf.String(), "Error:") // 実行環境によってファイルが存在しない場合のエラーメッセージが異なるので、Errorだけで判定
 }
 
 func TestRun_Help(t *testing.T) {
