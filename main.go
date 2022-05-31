@@ -7,10 +7,9 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/onozaty/rcf/encoder"
 	r "github.com/onozaty/rcf/replace"
 	"github.com/spf13/pflag"
-	e "golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/htmlindex"
 )
 
 const (
@@ -132,7 +131,7 @@ type condition struct {
 
 func replace(inputPath string, outputPath string, condition condition, charset string, recursive bool) error {
 
-	encoding, err := htmlindex.Get(charset)
+	encoder, err := encoder.NewEncoder(charset)
 	if err != nil {
 		return err
 	}
@@ -149,14 +148,14 @@ func replace(inputPath string, outputPath string, condition condition, charset s
 
 	if !inputInfo.IsDir() {
 		// ファイル指定
-		return replaceFile(inputPath, outputPath, replacer, encoding)
+		return replaceFile(inputPath, outputPath, replacer, encoder)
 	} else {
 		// ディレクトリ指定
-		return replaceFiles(inputPath, outputPath, replacer, encoding, recursive)
+		return replaceFiles(inputPath, outputPath, replacer, encoder, recursive)
 	}
 }
 
-func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer, encoding e.Encoding, recursive bool) error {
+func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer, encoder encoder.Encoder, recursive bool) error {
 
 	entries, err := os.ReadDir(inputDirPath)
 	if err != nil {
@@ -175,13 +174,13 @@ func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
-			err := replaceFile(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer, encoding)
+			err := replaceFile(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer, encoder)
 			if err != nil {
 				return err
 			}
 		} else if recursive {
 			// ディレクトリかつ再帰的にたどる場合
-			if err := replaceFiles(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer, encoding, recursive); err != nil {
+			if err := replaceFiles(filepath.Join(inputDirPath, entry.Name()), filepath.Join(outputDirPath, entry.Name()), replacer, encoder, recursive); err != nil {
 				return err
 			}
 		}
@@ -190,19 +189,19 @@ func replaceFiles(inputDirPath string, outputDirPath string, replacer r.Replacer
 	return nil
 }
 
-func replaceFile(inputFilePath string, outputFilePath string, replacer r.Replacer, encoding e.Encoding) error {
+func replaceFile(inputFilePath string, outputFilePath string, replacer r.Replacer, encoder encoder.Encoder) error {
 
 	inputBytes, err := os.ReadFile(inputFilePath)
 	if err != nil {
 		return err
 	}
 
-	decodedBytes, err := encoding.NewDecoder().Bytes(inputBytes)
+	inputContents, err := encoder.String(inputBytes)
 	if err != nil {
 		return err
 	}
 
-	outputContents := replacer.Replace(string(decodedBytes))
+	outputContents := replacer.Replace(inputContents)
 
 	out, err := os.Create(outputFilePath)
 	if err != nil {
@@ -210,7 +209,7 @@ func replaceFile(inputFilePath string, outputFilePath string, replacer r.Replace
 	}
 	defer out.Close()
 
-	encodedBytes, err := encoding.NewEncoder().Bytes([]byte(outputContents))
+	encodedBytes, err := encoder.Bytes(outputContents)
 	if err != nil {
 		return err
 	}
