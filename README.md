@@ -103,6 +103,16 @@ Charset must be one that can be specified in `htmlindex.Get`.
 
 * https://pkg.go.dev/golang.org/x/text/encoding/htmlindex#Get
 
+A special charset is `binary`.  
+If `binary` is specified, it can be treated as a hexadecimal character.  
+A hexadecimal character represents a byte with three characters prefixed by `x`, such as `x00` or `xFF`.
+
+To remove two consecutive bytes, such as 0x00 0x01, specify as follows
+
+```
+$ rcf -i input.txt -s x00x01 -t "" -o output.txt -c binary
+```
+
 ## Install
 
 You can download the binary from the following.
