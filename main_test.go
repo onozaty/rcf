@@ -378,6 +378,31 @@ func TestRun_Charset_SJIS(t *testing.T) {
 	assert.Equal(t, "えお", replaced)
 }
 
+func TestRun_Charset_Binary(t *testing.T) {
+
+	// ARRANGE
+	d := createTempDir(t)
+	defer os.RemoveAll(d)
+
+	input := createFileWriteBytes(t, d, "input.txt", []byte{0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0xF0})
+	output := filepath.Join(d, "output.txt")
+
+	args := []string{
+		"-i", input,
+		"-s", "x00x01",
+		"-t", "",
+		"-c", "binary",
+		"-o", output,
+	}
+
+	// ACT
+	c := run(args)
+
+	// ASSERT
+	require.Equal(t, OK, c)
+	replaced := readBytes(t, output)
+	assert.Equal(t, []byte{0x00, 0x02, 0xF0}, replaced)
+}
 func TestRun_Charset_Invalid(t *testing.T) {
 
 	// ARRANGE
